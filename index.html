@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limpa Cocô: A Aventura da Pá!</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light gray-blue background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+
+        .game-container {
+            background-color: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 90vw;
+            width: 800px; /* Adjust max width for desktop */
+            position: relative;
+        }
+
+        canvas {
+            background-color: #e0ffee; /* Light green grass */
+            border-radius: 10px;
+            border: 2px solid #82cc2b; /* Green border */
+            display: block;
+            touch-action: none; /* Prevent browser touch actions */
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            padding: 10px 0;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #334155; /* Slate color */
+        }
+
+        .message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 30px 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+            display: none; /* Hidden by default */
+            max-width: 80%;
+        }
+
+        .message-box h2 {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+            color: #fde047; /* Yellowish color */
+        }
+
+        .message-box p {
+            font-size: 1.5em;
+            margin-bottom: 25px;
+        }
+
+        .message-box button {
+            background-color: #34d399; /* Green button */
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 10px rgba(0, 215, 120, 0.3);
+        }
+
+        .message-box button:hover {
+            background-color: #10b981; /* Darker green on hover */
+            transform: translateY(-2px);
+        }
+
+        .character-name {
+            font-size: 0.8em;
+            color: #64748b;
+            text-align: center;
+            position: absolute;
+            white-space: nowrap;
+            transform: translateX(-50%);
+            left: 50%;
+            top: 100%; /* Position below the character */
+            margin-top: 5px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .game-container {
+                padding: 15px;
+                width: 95vw;
+            }
+
+            .game-info {
+                font-size: 1em;
+            }
+
+            .message-box h2 {
+                font-size: 2em;
+            }
+
+            .message-box p {
+                font-size: 1.2em;
+            }
+
+            .message-box button {
+                padding: 10px 25px;
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="game-container">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">Limpa Cocô: A Aventura da Pá!</h1>
+        <div class="game-info">
+            <div id="score" class="text-green-600">Pontuação: 0</div>
+            <div id="level" class="text-blue-600">Nível: 1</div>
+        </div>
+        <canvas id="gameCanvas" width="700" height="500"></canvas>
+
+        <!-- Custom Message Box -->
+        <div id="messageBox" class="message-box">
+            <h2 id="messageTitle">Fim de Jogo!</h2>
+            <p id="messageText">A Pandora tocou em um cocô! Sua pontuação final: <span id="finalScore">0</span></p>
+            <button id="restartButton">Jogar Novamente</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const levelDisplay = document.getElementById('level');
+        const messageBox = document.getElementById('messageBox');
+        const messageTitle = document.getElementById('messageTitle');
+        const messageText = document.getElementById('messageText');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+
+        // Game state variables
+        let score = 0;
+        let level = 1;
+        let gameOver = false;
+        let gameSpeedMultiplier = 1; // Increases with level
+        let poopSpawnRate = 1200; // Milliseconds between poop spawns, decreases with level
+
+        // Game entities
+        const characters = [];
+        const poops = [];
+        let pandora;
+        let scoop;
+
+        // --- Game Configuration ---
+        const CHARACTER_SIZE = 40;
+        const POOP_SIZE = 25;
+        const PANDORA_SIZE = 50;
+        const SCOOP_WIDTH = 50;
+        const SCOOP_HEIGHT = 50;
+        const INITIAL_CHARACTER_SPEED = 1.5;
+        const INITIAL_PANDORA_SPEED = 2;
+        const LEVEL_UP_SCORE = 10; // Score needed to level up
+        const MAX_POOPS_ON_SCREEN = 30; // Limit to prevent performance issues
+
+        // Character details with their emojis
+        const characterEmojis = [
+            { name: "Álvaro", emoji: "👨‍🦰" },
+            { name: "Guilherme", emoji: "🧔" },
+            { name: "Franciela", emoji: "👩‍🦳" },
+            { name: "Larissa", emoji: "👩" },
+            { name: "Érico", emoji: "👴" }
+        ];
+
+        // --- Helper Functions ---
+
+        /**
+         * Generates a random number within a range.
+         * @param {number} min - The minimum value.
+         * @param {number} max - The maximum value.
+         * @returns {number} A random number.
+         */
+        function getRandom(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        /**
+         * Checks for collision between two rectangular objects.
+         * @param {object} obj1 - First object with x, y, width, height.
+         * @param {object} obj2 - Second object with x, y, width, height.
+         * @returns {boolean} True if colliding, false otherwise.
+         */
+        function isColliding(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.width &&
+                   obj1.x + obj1.width > obj2.x &&
+                   obj1.y < obj2.y + obj2.height &&
+                   obj1.y + obj1.height > obj2.y;
+        }
+
+        /**
+         * Displays a custom message box.
+         * @param {string} title - The title of the message.
+         * @param {string} text - The main text of the message.
+         * @param {boolean} showRestartButton - Whether to show the restart button.
+         */
+        function showMessageBox(title, text, showRestartButton) {
+            messageTitle.textContent = title;
+            messageText.innerHTML = text; // Use innerHTML for dynamic content like finalScore
+            restartButton.style.display = showRestartButton ? 'block' : 'none';
+            messageBox.style.display = 'block';
+        }
+
+        /**
+         * Hides the custom message box.
+         */
+        function hideMessageBox() {
+            messageBox.style.display = 'none';
+        }
+
+        // --- Game Entities Classes ---
+
+        class Character {
+            constructor(name, emoji, x, y, speed) {
+                this.name = name;
+                this.emoji = emoji;
+                this.x = x;
+                this.y = y;
+                this.width = CHARACTER_SIZE;
+                this.height = CHARACTER_SIZE;
+                this.speed = speed;
+                this.dx = (Math.random() < 0.5 ? 1 : -1) * this.speed; // Initial random direction
+                this.dy = (Math.random() < 0.5 ? 1 : -1) * this.speed;
+                this.poopTimer = Date.now(); // Time last pooped
+                this.poopInterval = getRandom(poopSpawnRate * 0.8, poopSpawnRate * 1.2); // Individual poop interval
+            }
+
+            update() {
+                // Move character
+                this.x += this.dx * gameSpeedMultiplier;
+                this.y += this.dy * gameSpeedMultiplier;
+
+                // Bounce off walls
+                if (this.x + this.width > canvas.width || this.x < 0) {
+                    this.dx *= -1;
+                    this.x = Math.max(0, Math.min(this.x, canvas.width - this.width)); // Correct position
+                }
+                if (this.y + this.height > canvas.height || this.y < 0) {
+                    this.dy *= -1;
+                    this.y = Math.max(0, Math.min(this.y, canvas.height - this.height)); // Correct position
+                }
+
+                // Randomly change direction slightly to make movement less predictable
+                if (Math.random() < 0.01) { // 1% chance each frame to change direction
+                    this.dx = (Math.random() - 0.5) * 2 * this.speed;
+                    this.dy = (Math.random() - 0.5) * 2 * this.speed;
+                }
+
+                // Poop logic
+                if (Date.now() - this.poopTimer > this.poopInterval && poops.length < MAX_POOPS_ON_SCREEN) {
+                    poops.push(new Poop(this.x + this.width / 2 - POOP_SIZE / 2, this.y + this.height / 2 - POOP_SIZE / 2));
+                    this.poopTimer = Date.now();
+                    this.poopInterval = getRandom(poopSpawnRate * 0.8, poopSpawnRate * 1.2); // Reset for next poop
+                }
+            }
+
+            draw() {
+                ctx.font = `${this.width}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.x + this.width / 2, this.y + this.height / 2);
+
+                // Draw character name below the emoji
+                ctx.font = '12px Inter';
+                ctx.fillStyle = '#64748b';
+                ctx.fillText(this.name, this.x + this.width / 2, this.y + this.height + 10);
+            }
+        }
+
+        class Pandora {
+            constructor(x, y, speed) {
+                this.x = x;
+                this.y = y;
+                this.width = PANDORA_SIZE;
+                this.height = PANDORA_SIZE;
+                this.speed = speed;
+                this.dx = (Math.random() < 0.5 ? 1 : -1) * this.speed;
+                this.dy = (Math.random() < 0.5 ? 1 : -1) * this.speed;
+                // Using a simple black and white dog emoji
+                this.emoji = '🐶'; // Could be '🐕‍🦺' or '🐾' for a more specific feel
+            }
+
+            update() {
+                this.x += this.dx * gameSpeedMultiplier;
+                this.y += this.dy * gameSpeedMultiplier;
+
+                // Bounce off walls
+                if (this.x + this.width > canvas.width || this.x < 0) {
+                    this.dx *= -1;
+                    this.x = Math.max(0, Math.min(this.x, canvas.width - this.width));
+                }
+                if (this.y + this.height > canvas.height || this.y < 0) {
+                    this.dy *= -1;
+                    this.y = Math.max(0, Math.min(this.y, canvas.height - this.height));
+                }
+
+                // Randomly change direction
+                if (Math.random() < 0.015) { // Slightly higher chance than characters to change direction
+                    this.dx = (Math.random() - 0.5) * 2 * this.speed;
+                    this.dy = (Math.random() - 0.5) * 2 * this.speed;
+                }
+            }
+
+            draw() {
+                ctx.font = `${this.width}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.x + this.width / 2, this.y + this.height / 2);
+                ctx.font = '12px Inter';
+                ctx.fillStyle = '#64748b';
+                ctx.fillText("Pandora", this.x + this.width / 2, this.y + this.height + 10);
+            }
+        }
+
+        class Poop {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = POOP_SIZE;
+                this.height = POOP_SIZE;
+                this.emoji = '💩';
+            }
+
+            draw() {
+                ctx.font = `${this.width}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.x + this.width / 2, this.y + this.height / 2);
+            }
+        }
+
+        class Scoop {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = SCOOP_WIDTH;
+                this.height = SCOOP_HEIGHT;
+                this.emoji = '🧹'; // Using a broom as a scoop representation
+            }
+
+            draw() {
+                ctx.font = `${this.width}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.x + this.width / 2, this.y + this.height / 2);
+            }
+        }
+
+        // --- Game Functions ---
+
+        /**
+         * Initializes the game state.
+         */
+        function initializeGame() {
+            score = 0;
+            level = 1;
+            gameOver = false;
+            gameSpeedMultiplier = 1;
+            poopSpawnRate = 1200;
+            poops.length = 0; // Clear poops array
+            characters.length = 0; // Clear characters array
+
+            // Create characters
+            characterEmojis.forEach(charInfo => {
+                const x = getRandom(0, canvas.width - CHARACTER_SIZE);
+                const y = getRandom(0, canvas.height - CHARACTER_SIZE);
+                characters.push(new Character(charInfo.name, charInfo.emoji, x, y, INITIAL_CHARACTER_SPEED));
+            });
+
+            // Create Pandora
+            pandora = new Pandora(getRandom(0, canvas.width - PANDORA_SIZE), getRandom(0, canvas.height - PANDORA_SIZE), INITIAL_PANDORA_SPEED);
+
+            // Create Scoop
+            scoop = new Scoop(canvas.width / 2 - SCOOP_WIDTH / 2, canvas.height - SCOOP_HEIGHT - 10);
+
+            updateScoreDisplay();
+            updateLevelDisplay();
+            hideMessageBox();
+        }
+
+        /**
+         * Updates the score display.
+         */
+        function updateScoreDisplay() {
+            scoreDisplay.textContent = `Pontuação: ${score}`;
+        }
+
+        /**
+         * Updates the level display.
+         */
+        function updateLevelDisplay() {
+            levelDisplay.textContent = `Nível: ${level}`;
+        }
+
+        /**
+         * Advances the game level, increasing difficulty.
+         */
+        function levelUp() {
+            level++;
+            gameSpeedMultiplier += 0.1; // Characters and Pandora get faster
+            poopSpawnRate = Math.max(300, poopSpawnRate - 100); // Poop spawns faster, minimum 300ms
+            updateLevelDisplay();
+        }
+
+        /**
+         * Clears the canvas.
+         */
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        /**
+         * The main game loop.
+         */
+        function animate() {
+            if (gameOver) {
+                return; // Stop the animation loop
+            }
+
+            clearCanvas();
+
+            // Update and draw characters
+            characters.forEach(character => {
+                character.update();
+                character.draw();
+            });
+
+            // Update and draw Pandora
+            pandora.update();
+            pandora.draw();
+
+            // Update and draw Scoop
+            scoop.draw();
+
+            // Draw poops and check collisions
+            for (let i = poops.length - 1; i >= 0; i--) {
+                const poop = poops[i];
+                poop.draw();
+
+                // Check scoop-poop collision
+                if (isColliding(scoop, poop)) {
+                    poops.splice(i, 1); // Remove poop
+                    score++;
+                    updateScoreDisplay();
+                    if (score % LEVEL_UP_SCORE === 0 && score > 0) {
+                        levelUp();
+                    }
+                    continue; // Skip Pandora collision check for this poop as it's removed
+                }
+
+                // Check Pandora-poop collision
+                if (isColliding(pandora, poop)) {
+                    gameOver = true;
+                    finalScoreDisplay.textContent = score;
+                    showMessageBox("Fim de Jogo!", `A Pandora tocou em um cocô! Sua pontuação final: ${score}`, true);
+                    break; // Stop game loop
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // --- Event Listeners ---
+
+        // Mouse movement for scoop
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameOver) return;
+            const rect = canvas.getBoundingClientRect();
+            scoop.x = e.clientX - rect.left - scoop.width / 2;
+            scoop.y = e.clientY - rect.top - scoop.height / 2;
+
+            // Keep scoop within canvas bounds
+            scoop.x = Math.max(0, Math.min(scoop.x, canvas.width - scoop.width));
+            scoop.y = Math.max(0, Math.min(scoop.y, canvas.height - scoop.height));
+        });
+
+        // Touch movement for scoop (mobile responsiveness)
+        canvas.addEventListener('touchmove', (e) => {
+            if (gameOver) return;
+            e.preventDefault(); // Prevent scrolling
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            scoop.x = touch.clientX - rect.left - scoop.width / 2;
+            scoop.y = touch.clientY - rect.top - scoop.height / 2;
+
+            // Keep scoop within canvas bounds
+            scoop.x = Math.max(0, Math.min(scoop.x, canvas.width - scoop.width));
+            scoop.y = Math.max(0, Math.min(scoop.y, canvas.height - scoop.height));
+        }, { passive: false }); // passive: false to allow preventDefault
+
+        // Restart button click
+        restartButton.addEventListener('click', () => {
+            initializeGame();
+            animate(); // Start new game loop
+        });
+
+        // --- Initialize and Start Game ---
+        window.onload = function() {
+            initializeGame();
+            animate();
+        };
+
+        // Handle canvas resizing for responsiveness
+        window.addEventListener('resize', () => {
+            // No need to resize canvas directly here if width/height are fixed.
+            // If dynamic canvas size is desired, recalculate width/height and re-initialize game elements.
+            // For this game, fixed canvas size with CSS scaling for container is simpler.
+        });
+
+    </script>
+</body>
+</html>
